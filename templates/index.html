@@ -1,0 +1,31 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Domen tekshiruvi</title>
+    <link rel="stylesheet" href="/static/css/styles.css">
+    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+</head>
+<body>
+    <div class="floating-logo word1"><img src="/static/images/word1.png" alt="Word 1"></div>
+    <div class="floating-logo word2"><img src="/static/images/word2.png" alt="Word 2"></div>
+    <div class="floating-logo excel1"><img src="/static/images/excel1.png" alt="Excel 1"></div>
+    <div class="floating-logo excel2"><img src="/static/images/excel2.png" alt="Excel 2"></div>
+    <div class="floating-logo text1"><img src="/static/images/text1.png" alt="Text 1"></div>
+    <div class="floating-logo text2"><img src="/static/images/text2.png" alt="Text 2"></div>
+    <div class="container">
+        <div class="content">
+            <h1>Domen tekshiruvi</h1>
+            <p>Domenlar holatini tekshirish uchun .txt, .docx yoki .xlsx faylini yuklang.</p>
+            <div class="upload-box">
+                <input type="file" id="fileInput" accept=".txt,.docx,.xlsx" />
+                <button onclick="uploadFile()">Yuklang va tekshiring</button>
+            </div>
+            <div id="error" class="error"></div>
+            <div id="loading" class="loading">Jarayonda...</div>
+        </div>
+    </div>
+    <script src="/static/js/script.js"></script>
+</body>
+</html>

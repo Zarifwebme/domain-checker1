@@ -1,0 +1,25 @@
+# Virtual environment
+.venv/
+venv/
+
+# Python cache files
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Uploads or generated files
+uploads/
+*.xlsx
+
+# Logs and debug files
+*.log
+
+# IDE-specific files
+.idea/
+.vscode/
+
+# Static files (if generated dynamically)
+
+# Environment variables
+.env
