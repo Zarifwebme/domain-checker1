@@ -1,46 +1,58 @@
-Domain Checker Web App
-A Flask-based web application to check domains from uploaded files (.txt, .docx, .xlsx) and generate an Excel report with domain status, status code, page type, and title.
-Features
+Domenlarni tekshirish veb-ilovasi
+Flask asosidagi veb-ilova .txt, .docx yoki .xlsx fayllaridagi domenlarni tekshiradi va o‘zbek tilida Excel hisobotini yaratadi.
+Xususiyatlar
 
-Upload .txt, .docx, or .xlsx files containing domains.
-Check domain status (Working/Not Working), HTTP status code, page type (Login/Functional), and page title.
-Generate a formatted Excel report with conditional formatting.
-Deployable on Railway with gunicorn for stability.
+.txt, .docx yoki .xlsx fayllarini yuklash.
+Domen holati (Ishlayapti/Ishlamayapti), HTTP holat kodi, sahifa turi (Ichki/Tashqi) va sarlavhani tekshirish.
+O‘zbek tilida shartli formatlash bilan Excel hisoboti.
+Bootstrap v5.3.3 va Word, Excel, tekst fayl logotiplari bilan frontend.
+Railway’da gunicorn bilan joylashtiriladi.
 
-Setup
+Sozlash
 
-Clone the repository:git clone <repository-url>
+Repozitoriyani klonlash:git clone <repository-url>
 cd domain_checker
 
 
-Create a virtual environment and install dependencies:python -m venv venv
-source venv/bin/activate  # On Windows: venv\Scripts\activate
+Virtual muhit yaratish va bog‘liqliklarni o‘rnatish:python -m venv venv
+source venv/bin/activate  # Windows’da: venv\Scripts\activate
 pip install -r requirements.txt
 
 
-Run the app locally:python app.py
+static/images/ ga logo rasmlarini qo‘shish:
+word1.png, word2.png (Word ikonkalari)
+excel1.png, excel2.png (Excel ikonkalari)
+text1.png, text2.png (Tekst ikonkalari)
 
 
-Deploy to Railway:
-Push the code to a GitHub repository.
-Connect the repository to Railway.
-Set the PORT environment variable (Railway handles this automatically).
-Deploy using the Procfile.
+Ilovani lokalda ishga tushirish:python app.py
+
+
+Railway’ga joylashtirish:
+Kodni GitHub repozitoriyasiga yuboring.
+Repozitoriyani Railway’ga ulang.
+PIP_NO_CACHE_DIR=1 muhit o‘zgaruvchisini o‘rnating (ixtiyoriy).
+Procfile yordamida joylashtiring.
 
 
 
-Usage
+Foydalanish
 
-Open the app in a browser.
-Upload a file containing domains (one per line or cell).
-Wait for the app to process and download the Excel report.
+Ilovani brauzerda oching.
+Domenlar ro‘yxati bo‘lgan faylni yuklang.
+Natijalarni o‘zbek tilida Excel hisobotida yuklab oling.
 
-File Structure
+Fayl tuzilishi
 
 app.py: Flask backend.
-utils/: File reading, domain checking, and Excel generation logic.
-static/: CSS and JS for the frontend.
-templates/: HTML for the single-page frontend.
-requirements.txt: Python dependencies.
-Procfile: Railway process configuration.
+utils/: Fayl o‘qish, domen tekshirish va Excel hisoboti logikasi.
+static/: CSS, JS, rasmlar va favicon.
+templates/: Yagona sahifa uchun HTML.
+requirements.txt: Python bog‘liqliklari.
+Procfile: Railway jarayon sozlamalari.
+
+Eslatmalar
+
+static/images/ dagi o‘rinbosar rasmlarni haqiqiy Word, Excel, tekst ikonkalari bilan almashtiring (100x100px PNG).
+example.com, login.microsoftonline.com kabi domenlar bilan test.txt faylida sinovdan o‘tkazing.
 

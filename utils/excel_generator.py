@@ -6,10 +6,9 @@ from openpyxl.utils import get_column_letter
 def generate_excel(results, output_path):
     wb = Workbook()
     ws = wb.active
-    ws.title = "Отчет по проверке доменов"  # Report title in Russian
+    ws.title = "Domenlarni tekshirish hisoboti"
 
-    # Define headers in Russian
-    headers = ["№", "Домен", "Статус", "Код состояния", "Тип страницы", "Заголовок"]
+    headers = ["№", "Domen", "Holati", "Holat kodi", "Sahifa turi", "Sarlavha"]
     for col, header in enumerate(headers, 1):
         cell = ws.cell(row=1, column=col)
         cell.value = header
@@ -17,50 +16,51 @@ def generate_excel(results, output_path):
         cell.fill = PatternFill(start_color="4CAF50", end_color="4CAF50", fill_type="solid")
         cell.alignment = Alignment(horizontal="center")
 
-    # Define status code meanings in Russian
     status_codes = {
-        200: "ОК",
-        404: "Не найдено",
-        403: "Запрещено",
-        500: "Ошибка сервера",
-        None: "Недоступно"
+        200: "OK",
+        404: "Topilmadi",
+        403: "Taqiqlangan",
+        500: "Server xatosi",
+        429: "Tekshirish kerak",
+        503: "Tekshirish kerak",
+        None: "Mavjud emas"
     }
 
-    # Map page types to Russian
     page_types = {
-        "Login Page": "Страница входа login",
-        "Functional Page": "Функциональная страница",
-        "Error Page": "Страница ошибки",
-        "Non-HTML Content": "Нехтмл-контент",
-        "Unknown": "Неизвестно",
-        "Error": "Ошибка"
+        "Internal": "Ichki",
+        "External": "Tashqi",
+        "Error": "Xato",
+        "Non-HTML": "HTML emas",
+        "Unknown": "Noma'lum"
     }
 
-    # Map title defaults to Russian
     title_defaults = {
-        "No Title": "Без заголовка",
-        "Error": "Ошибка",
-        "Non-HTML": "Нехтмл"
+        "No Title": "Sarlavhasiz",
+        "Error": "Xato",
+        "Non-HTML": "HTML emas"
     }
 
-    # Add data
     for row, result in enumerate(results, 2):
         ws.cell(row=row, column=1).value = row - 1
         ws.cell(row=row, column=2).value = result["domain"]
-        ws.cell(row=row, column=3).value = "Работает" if result["status"] == "Working" else "Не работает"
+        ws.cell(row=row, column=3).value = {
+            "Working": "Ishlayapti",
+            "Not Working": "Ishlamayapti",
+            "Need to Check": "Tekshirish kerak"
+        }.get(result["status"], "Noma'lum")
         ws.cell(row=row, column=4).value = status_codes.get(result["status_code"], str(result["status_code"]))
         ws.cell(row=row, column=5).value = page_types.get(result["page_type"], result["page_type"])
         ws.cell(row=row, column=6).value = title_defaults.get(result["title"], result["title"])
 
-        # Apply conditional formatting
         status_cell = ws.cell(row=row, column=3)
         status_cell.fill = PatternFill(
-            start_color="4CAF50" if result["status"] == "Working" else "F44336",
-            end_color="4CAF50" if result["status"] == "Working" else "F44336",
+            start_color="4CAF50" if result["status"] == "Working" else "F44336" if result[
+                                                                                       "status"] == "Not Working" else "FFC107",
+            end_color="4CAF50" if result["status"] == "Working" else "F44336" if result[
+                                                                                     "status"] == "Not Working" else "FFC107",
             fill_type="solid"
         )
 
-    # Style table
     thin_border = Border(
         left=Side(style='thin'),
         right=Side(style='thin'),
@@ -73,7 +73,6 @@ def generate_excel(results, output_path):
             cell.border = thin_border
             cell.alignment = Alignment(horizontal="left")
 
-    # Adjust column widths
     for col in range(1, 7):
         ws.column_dimensions[get_column_letter(col)].width = 20
 
