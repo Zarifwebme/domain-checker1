@@ -139,7 +139,7 @@ async def check_domain(client, domain):
     return result
 
 
-async def check_domains(domains, batch_size=25):
+async def check_domains(domains, batch_size=5):
     results = []
     async with httpx.AsyncClient(timeout=3.0) as client:
         for i in range(0, len(domains), batch_size):
