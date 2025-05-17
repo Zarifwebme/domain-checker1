@@ -72,6 +72,9 @@ BROWSER_HEADERS = {
     'Cache-Control': 'max-age=0'
 }
 
+# List of status codes that require check
+NEED_CHECK_STATUS_CODES = {400, 403, 429, 503}
+
 
 async def check_domain(client: httpx.AsyncClient, domain: str, timeout: float = REQUEST_TIMEOUT) -> Dict[str, Any]:
     """
@@ -141,12 +144,12 @@ async def check_domain(client: httpx.AsyncClient, domain: str, timeout: float = 
                 result["status"] = "Working"
                 # Mark domain as healthy
                 domain_health_cache[domain_key] = "good"
-            elif response.status_code in (429, 503):
+            elif response.status_code in NEED_CHECK_STATUS_CODES:
                 result["status"] = "Need to Check"
             else:
                 result["status"] = "Not Working"
                 # For persistent server errors, mark domain as poor health
-                if response.status_code >= 500:
+                if response.status_code >= 500 and response.status_code not in NEED_CHECK_STATUS_CODES:
                     domain_health_cache[domain_key] = "poor"
 
             # Agar 200 bo'lmasa, parsing qilishga hojat yo'q
@@ -217,18 +220,17 @@ async def check_domain(client: httpx.AsyncClient, domain: str, timeout: float = 
 
         except httpx.HTTPStatusError as e:
             result["status_code"] = e.response.status_code
-            result["status"] = "Need to Check" if result["status_code"] in (429, 503) else "Not Working"
-            if result["status_code"] >= 500:
+            result["status"] = "Need to Check" if result["status_code"] in NEED_CHECK_STATUS_CODES else "Not Working"
+            if result["status_code"] >= 500 and result["status_code"] not in NEED_CHECK_STATUS_CODES:
                 domain_health_cache[domain_key] = "poor"
         except httpx.TimeoutException:
             if attempt < MAX_RETRIES:
                 logger.warning(f"Timeout for {domain}, retry {attempt + 1}/{MAX_RETRIES}")
                 await asyncio.sleep(RETRY_DELAY)
                 continue
-            result["status"] = "Not Working"
+            result["status"] = "Need to Check"  # Changed from "Not Working" to "Need to Check" for timeout
             result["page_type"] = "Error"
             result["title"] = "Timeout"
-            domain_health_cache[domain_key] = "poor"
         except httpx.RequestError as e:
             result["status"] = "Not Working"
             result["page_type"] = "Error"
@@ -259,7 +261,7 @@ async def process_batch(client: httpx.AsyncClient, domains: List[str]) -> List[D
             logger.error(f"Error processing domain {domains[i]}: {str(result)}")
             processed_results.append({
                 "domain": domains[i],
-                "status": "Not Working",
+                "status": "Need to Check",  # Changed from "Not Working" to "Need to Check"
                 "status_code": None,
                 "page_type": "Error",
                 "title": f"Error: {type(result).__name__}"
