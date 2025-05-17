@@ -7,3 +7,5 @@ aiohttp==3.10.5
 werkzeug==3.0.4
 beautifulsoup4==4.12.3
 gevent==24.2.1
+tldextract
+httpx[http2, http3]
