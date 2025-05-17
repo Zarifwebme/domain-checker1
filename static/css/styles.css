@@ -1,151 +1,385 @@
 body {
-    font-family: Arial, sans-serif;
-    background-color: #fffffff;
+    font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+    background-color: #f0f2f5;
     margin: 0;
     padding: 0;
     display: flex;
     justify-content: center;
     align-items: center;
-    height: 100vh;
+    min-height: 100vh;
 }
 
 .container {
     position: relative;
-    background: rgba(255, 255, 255, 0.9); /* Semi-transparent for readability */
+    background: rgba(255, 255, 255, 0.95);
     padding: 2rem;
-    background-color: #f4f4f9;
-    border-radius: 10px;
-    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+    border-radius: 12px;
+    box-shadow: 0 8px 30px rgba(0, 0, 0, 0.1);
     text-align: center;
-    max-width: 500px;
+    max-width: 600px;
     width: 100%;
-    overflow: hidden; /* Prevent logos from overflowing */
+    overflow: hidden;
+    transition: all 0.3s ease;
 }
 
 .content {
     position: relative;
-    z-index: 2; /* Ensure content is above logos */
+    z-index: 2;
 }
 
 h1 {
-    color: #333;
+    color: #006ecd;
     margin-bottom: 1rem;
+    font-weight: 600;
 }
 
 p {
-    color: #666;
-    margin-bottom: 2rem;
+    color: #555;
+    margin-bottom: 1.5rem;
+    font-size: 1.05rem;
 }
 
 .upload-box {
     display: flex;
     flex-direction: column;
-    gap: 1rem;
+    gap: 1.5rem;
 }
 
-input[type="file"] {
-    padding: 0.5rem;
-    border: 2px dashed #ccc;
-    border-radius: 5px;
+.file-input-container {
+    position: relative;
+    width: 100%;
+    height: 120px;
+    border: 2px dashed #aaa;
+    border-radius: 8px;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
     cursor: pointer;
+    transition: all 0.3s;
+    overflow: hidden;
+}
+
+.file-input-container:hover {
+    border-color: #006ecd;
+    background-color: rgba(0, 110, 205, 0.05);
+}
+
+.file-input-container.has-file {
+    border-color: #4CAF50;
+    background-color: rgba(76, 175, 80, 0.05);
+}
+
+.file-input-container i {
+    font-size: 2rem;
+    color: #999;
+    margin-bottom: 0.5rem;
+}
+
+.file-input-container.has-file i {
+    color: #4CAF50;
+}
+
+#fileInput {
+    opacity: 0;
+    position: absolute;
+    width: 100%;
+    height: 100%;
+    cursor: pointer;
+}
+
+.file-label {
+    font-weight: 500;
+    color: #555;
+}
+
+.file-name {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+    color: #4CAF50;
+    font-weight: 500;
+    display: none;
 }
 
 button {
-    background-color: #016ecd;
+    background-color: #006ecd;
     color: white;
-    padding: 0.75rem 1.5rem;
+    padding: 0.85rem 2rem;
     border: none;
-    border-radius: 5px;
+    border-radius: 8px;
     cursor: pointer;
-    font-size: 1rem;
+    font-size: 1.1rem;
+    font-weight: 500;
+    transition: all 0.2s;
+    width: 100%;
 }
 
 button:hover {
-    background-color: #4aafcd;
+    background-color: #0056a4;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
+}
+
+button:active {
+    transform: translateY(0);
+}
+
+button:disabled {
+    background-color: #ccc;
+    cursor: not-allowed;
+    transform: none;
+    box-shadow: none;
 }
 
 .error {
     color: #F44336;
     margin-top: 1rem;
+    padding: 0.75rem;
+    border-radius: 6px;
+    background-color: rgba(244, 67, 54, 0.1);
+    border-left: 4px solid #F44336;
+    text-align: left;
     display: none;
 }
 
-.loading {
-    color: #4CAF50;
-    margin-top: 1rem;
+/* Processing indicator */
+.processing-container {
+    margin-top: 1.5rem;
     display: none;
+}
+
+.progress-wrapper {
+    width: 100%;
+    height: 6px;
+    background-color: #e0e0e0;
+    border-radius: 3px;
+    overflow: hidden;
+    margin-bottom: 0.5rem;
+}
+
+.progress-bar {
+    height: 100%;
+    width: 0%;
+    background-color: #4CAF50;
+    border-radius: 3px;
+    transition: width 0.3s ease-in-out;
+}
+
+.status-text {
+    font-size: 0.9rem;
+    color: #555;
+    margin-bottom: 0.5rem;
+}
+
+.domain-counter {
+    font-size: 0.85rem;
+    color: #777;
+}
+
+/* Result summary */
+.result-summary {
+    margin-top: 1.5rem;
+    display: none;
+    text-align: left;
+    background-color: #f9f9f9;
+    border-radius: 8px;
+    padding: 1rem;
+}
+
+.summary-title {
+    font-weight: 600;
+    color: #333;
+    margin-bottom: 0.75rem;
+}
+
+.summary-item {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 0.5rem;
+}
+
+.summary-label {
+    color: #555;
+}
+
+.summary-value {
+    font-weight: 500;
+}
+
+.download-container {
+    margin-top: 1.5rem;
+    display: none;
+}
+
+.download-btn {
+    background-color: #4CAF50;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0.5rem;
+}
+
+.download-btn:hover {
+    background-color: #3d8b40;
 }
 
 /* Floating Logos */
 .floating-logo {
     position: absolute;
-    z-index: 1; /* Behind content */
-    opacity: 0.8; /* Subtle transparency */
+    z-index: 1;
+    opacity: 0.5;
+    transition: all 0.3s;
+}
+
+.floating-logo:hover {
+    opacity: 0.8;
+    transform: scale(1.1);
 }
 
 .floating-logo img {
-    width: 100px;
-    height: 100px;
+    width: 80px;
+    height: 80px;
     object-fit: contain;
 }
 
 .floating-logo.word1 {
     top: 10%;
     left: 10%;
-    animation: drift 12s linear infinite;
+    animation: drift 14s linear infinite;
 }
 
 .floating-logo.word2 {
     bottom: 15%;
     right: 15%;
-    animation: drift 15s linear infinite reverse;
+    animation: drift 16s linear infinite reverse;
 }
 
 .floating-logo.excel1 {
     top: 30%;
     right: 20%;
-    animation: drift 10s linear infinite;
+    animation: drift 12s linear infinite;
 }
 
 .floating-logo.excel2 {
     bottom: 25%;
     left: 15%;
-    animation: drift 13s linear infinite reverse;
+    animation: drift 15s linear infinite reverse;
 }
 
 .floating-logo.text1 {
     top: 20%;
     left: 25%;
-    animation: drift 11s linear infinite;
+    animation: drift 13s linear infinite;
 }
 
 .floating-logo.text2 {
     bottom: 10%;
     right: 10%;
-    animation: drift 14s linear infinite;
+    animation: drift 17s linear infinite;
 }
 
 @keyframes drift {
     0% {
-        transform: translate(0, 0);
+        transform: translate(0, 0) rotate(0deg);
+    }
+    25% {
+        transform: translate(15px, -15px) rotate(2deg);
     }
     50% {
-        transform: translate(20px, -20px);
+        transform: translate(30px, 0) rotate(0deg);
+    }
+    75% {
+        transform: translate(15px, 15px) rotate(-2deg);
     }
     100% {
-        transform: translate(0, 0);
+        transform: translate(0, 0) rotate(0deg);
     }
 }
 
-@media (max-width: 600px) {
+/* Footer */
+footer {
+    margin-top: 2rem;
+    color: #777;
+    font-size: 0.85rem;
+}
+
+/* Media queries */
+@media (max-width: 768px) {
     .container {
         padding: 1.5rem;
+        margin: 1rem;
     }
+
     .floating-logo img {
         width: 60px;
         height: 60px;
     }
+
     .floating-logo {
-        opacity: 0.2; /* Slightly less visible on small screens */
+        opacity: 0.3;
     }
+}
+
+/* Add Font Awesome Icons */
+.fa {
+    font-family: 'FontAwesome', sans-serif;
+    font-weight: 900;
+}
+
+.fa-upload:before {
+    content: "\f093";
+}
+
+.fa-file-text:before {
+    content: "\f15c";
+}
+
+.fa-file-word:before {
+    content: "\f1c2";
+}
+
+.fa-file-excel:before {
+    content: "\f1c3";
+}
+
+.fa-check:before {
+    content: "\f00c";
+}
+
+.fa-download:before {
+    content: "\f019";
+}
+
+/* Toast notification */
+.toast {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 4px;
+    color: white;
+    font-weight: 500;
+    max-width: 300px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 1000;
+    transform: translateY(-20px);
+    opacity: 0;
+    transition: all 0.3s;
+}
+
+.toast.show {
+    transform: translateY(0);
+    opacity: 1;
+}
+
+.toast.success {
+    background-color: #4CAF50;
+}
+
+.toast.error {
+    background-color: #F44336;
+}
+
+.toast.info {
+    background-color: #2196F3;
 }

@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Domenlarni tekshirish</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link rel="stylesheet" href="/static/css/styles.css">
     <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
 </head>
@@ -15,23 +16,73 @@
     <div class="floating-logo excel2"><img src="/static/images/excel2.png" alt="Excel 2"></div>
     <div class="floating-logo text1"><img src="/static/images/text1.png" alt="Text 1"></div>
     <div class="floating-logo text2"><img src="/static/images/text2.png" alt="Text 2"></div>
+
     <div class="container">
         <!-- Main Content -->
         <div class="content">
             <h1>Domenlarni tekshirish</h1>
             <p>Domenlar holatini tekshirish uchun .txt, .docx yoki .xlsx faylini yuklang.</p>
+
             <div class="upload-box">
-                <input type="file" id="fileInput" accept=".txt,.docx,.xlsx" />
-                <button onclick="uploadFile()">Yuklash va tekshirish</button>
+                <!-- File Input with Visual Feedback -->
+                <div id="fileContainer" class="file-input-container">
+                    <i class="fa fa-upload"></i>
+                    <span class="file-label">Faylni tanlang yoki bu yerga tashlang</span>
+                    <span id="fileName" class="file-name"></span>
+                    <input type="file" id="fileInput" accept=".txt,.docx,.xlsx" />
+                </div>
+
+                <button id="uploadBtn" onclick="uploadFile()" disabled>Yuklash va tekshirish</button>
             </div>
+
+            <!-- Error Display -->
             <div id="error" class="error"></div>
-            <div id="loading" class="loading">Qayta ishlash...</div>
+
+            <!-- Processing Indicator -->
+            <div id="processingContainer" class="processing-container">
+                <div class="progress-wrapper">
+                    <div id="progressBar" class="progress-bar"></div>
+                </div>
+                <div id="statusText" class="status-text">Tayyorlanmoqda...</div>
+                <div id="domainCounter" class="domain-counter">Domenlar tekshirilmoqda...</div>
+            </div>
+
+            <!-- Results Summary -->
+            <div id="resultSummary" class="result-summary">
+                <div class="summary-title">Tekshirish natijalari</div>
+                <div class="summary-item">
+                    <span class="summary-label">Jami domenlar:</span>
+                    <span id="totalDomains" class="summary-value">0</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Ishlayotgan domenlar:</span>
+                    <span id="workingDomains" class="summary-value">0</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Ishlamayotgan domenlar:</span>
+                    <span id="notWorkingDomains" class="summary-value">0</span>
+                </div>
+                <div class="summary-item">
+                    <span class="summary-label">Tekshirish kerak:</span>
+                    <span id="checkDomains" class="summary-value">0</span>
+                </div>
+            </div>
+
+            <!-- Download Button -->
+            <div id="downloadContainer" class="download-container">
+                <a id="downloadLink" href="#" class="download-btn">
+                    <i class="fa fa-download"></i>
+                    Excel hisobotini yuklab olish
+                </a>
+            </div>
         </div>
+
         <!-- Version -->
         <footer>
-            <p>Domain Checker v1.0</p>
+            <p>Domain Checker v1.1 &copy; 2025</p>
         </footer>
     </div>
+
     <script src="/static/js/script.js"></script>
 </body>
 </html>
