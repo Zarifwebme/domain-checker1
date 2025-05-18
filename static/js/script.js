@@ -1,14 +1,12 @@
 // Global variables
 let processingTimer = null;
-let progressInterval = null;
-let currentProgress = 0;
+let currentStage = 0;
 const processingStages = [
     "Faylni yuklash...",
     "Domenlarni o'qish...",
     "Domenlarni tekshirish...",
     "Excel hisobotini yaratish..."
 ];
-let currentStage = 0;
 
 // File input handling
 document.addEventListener('DOMContentLoaded', () => {
@@ -83,34 +81,11 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// Progress bar animation
-function updateProgressBar(progress) {
-    const progressBar = document.getElementById('progressBar');
-    const progressText = document.getElementById('progressText');
-    
-    if (!progressBar || !progressText) {
-        console.error('Progress bar elements not found');
-        return;
-    }
-    
-    // Update progress bar width
-    progressBar.style.width = `${progress}%`;
-    
-    // Update progress text
-    progressText.textContent = `${progress}%`;
-    
-    // Add continuous scrolling animation
-    if (progress < 100) {
-        progressBar.style.animation = 'progressScroll 1s linear infinite';
-    } else {
-        progressBar.style.animation = 'none';
-    }
-}
-
 // Show download button
 function showDownloadButton(url, filename) {
     const downloadContainer = document.getElementById('downloadContainer');
     const downloadBtn = document.getElementById('downloadBtn');
+    const processingContainer = document.getElementById('processingContainer');
     
     if (!downloadContainer || !downloadBtn) {
         console.error('Download elements not found');
@@ -120,33 +95,8 @@ function showDownloadButton(url, filename) {
     downloadBtn.href = url;
     downloadBtn.download = filename;
     downloadContainer.style.display = 'block';
+    processingContainer.style.display = 'none';
 }
-
-// Add CSS animation for continuous scrolling
-const style = document.createElement('style');
-style.textContent = `
-    @keyframes progressScroll {
-        0% {
-            background-position: 0% 50%;
-        }
-        100% {
-            background-position: 200% 50%;
-        }
-    }
-    
-    #progressBar {
-        background: linear-gradient(90deg, 
-            #4CAF50 0%, 
-            #45a049 25%, 
-            #4CAF50 50%, 
-            #45a049 75%, 
-            #4CAF50 100%
-        );
-        background-size: 200% 100%;
-        transition: width 0.3s ease-in-out;
-    }
-`;
-document.head.appendChild(style);
 
 // Main upload function
 async function uploadFile() {
@@ -154,11 +104,10 @@ async function uploadFile() {
     const errorDiv = document.getElementById('error');
     const processingContainer = document.getElementById('processingContainer');
     const downloadContainer = document.getElementById('downloadContainer');
-    const progressBar = document.getElementById('progressBar');
     const statusText = document.getElementById('statusText');
 
     // Check if all required elements exist
-    if (!fileInput || !errorDiv || !processingContainer || !downloadContainer || !progressBar || !statusText) {
+    if (!fileInput || !errorDiv || !processingContainer || !downloadContainer || !statusText) {
         console.error('Required elements not found');
         showToast('Saytda xatolik yuz berdi. Iltimos, sahifani yangilang.', 'error');
         return;
@@ -179,9 +128,6 @@ async function uploadFile() {
         // Show processing indicator
         processingContainer.style.display = 'block';
         statusText.textContent = 'Faylni yuklash...';
-        
-        // Start with 0% progress and continuous animation
-        updateProgressBar(0);
 
         // Prepare form data
         const formData = new FormData();
@@ -211,8 +157,6 @@ async function uploadFile() {
         const notWorking = response.headers.get('X-Not-Working-Domains');
         const needCheck = response.headers.get('X-Need-Check-Domains');
 
-        // Update progress to 100% and stop animation
-        updateProgressBar(100);
         statusText.textContent = 'Yakunlandi!';
 
         // Get the file blob
@@ -231,9 +175,6 @@ async function uploadFile() {
         errorDiv.textContent = error.message || 'Server xatosi. Iltimos, qayta urinib ko\'ring.';
         errorDiv.style.display = 'block';
         processingContainer.style.display = 'none';
-        if (progressBar) {
-            progressBar.style.animation = 'none';
-        }
         showToast(error.message || 'Xatolik yuz berdi!', 'error');
     }
 }

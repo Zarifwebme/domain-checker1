@@ -148,21 +148,19 @@ button:disabled {
     display: none;
 }
 
-.progress-wrapper {
-    width: 100%;
-    height: 6px;
-    background-color: #e0e0e0;
-    border-radius: 3px;
-    overflow: hidden;
+.processing-text {
+    font-size: 1.2rem;
+    color: #006ecd;
+    font-weight: 500;
     margin-bottom: 0.5rem;
+    animation: blink 1.5s infinite;
 }
 
-.progress-bar {
-    height: 100%;
-    width: 0%;
-    background-color: #4CAF50;
-    border-radius: 3px;
-    transition: width 0.3s ease-in-out;
+@keyframes blink {
+    0% { opacity: 1; }
+    33% { opacity: 0.3; }
+    66% { opacity: 0.3; }
+    100% { opacity: 1; }
 }
 
 .status-text {
