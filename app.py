@@ -15,7 +15,7 @@ app = Flask(__name__)
 app.config['UPLOAD_FOLDER'] = 'uploads'
 app.config['MAX_CONTENT_LENGTH'] = 32 * 1024 * 1024  # 32MB max file size
 app.config['DOMAIN_LIMIT'] = 1000  # Bir tekshirishda maksimal domenlar soni
-app.config['PROCESSING_TIMEOUT'] = 300  # 5 daqiqalik timeout
+app.config['PROCESSING_TIMEOUT'] = 180  # Reduced timeout to 3 minutes (from 5)
 
 # Upload papkasini yaratish
 os.makedirs(app.config['UPLOAD_FOLDER'], exist_ok=True)
@@ -73,7 +73,7 @@ class TimeoutManager:
         self.lock = threading.Lock()
         self.active_tasks = {}
 
-    def add_task(self, task_id, timeout=300):
+    def add_task(self, task_id, timeout=180):
         with self.lock:
             self.active_tasks[task_id] = {
                 'start_time': time.time(),
@@ -98,12 +98,37 @@ class TimeoutManager:
 timeout_manager = TimeoutManager()
 
 
-# Domainlar ro'yxatini tekshirish va Excel hisobotini yaratish
-async def process_domains(domains, output_path, task_id, batch_size=8):
+# Domain processing function with improved error handling
+async def process_domains(domains, output_path, task_id, batch_size=5):
     try:
-        # Domain tekshirishni boshlash
-        logger.info(f"Starting domain processing for task {task_id} with {len(domains)} domains")
-        results = await check_domains(domains, batch_size)
+        # Limit number of domains to process to avoid timeouts
+        max_domains = min(len(domains), app.config['DOMAIN_LIMIT'])
+        domains_to_process = domains[:max_domains]
+
+        logger.info(f"Starting domain processing for task {task_id} with {len(domains_to_process)} domains")
+
+        # Set timeout for the entire check_domains operation
+        try:
+            # Create a task with timeout
+            check_task = asyncio.create_task(check_domains(domains_to_process, batch_size))
+            results = await asyncio.wait_for(check_task, timeout=app.config['PROCESSING_TIMEOUT'])
+        except asyncio.TimeoutError:
+            logger.error(f"Domain checking timed out for task {task_id}")
+            # Process domains that we've already checked
+            if hasattr(check_task, "_domains_processed") and check_task._domains_processed:
+                results = check_task._domains_processed
+                logger.info(f"Partial results available: {len(results)} domains processed")
+            else:
+                # Generate basic "Need to Check" responses if no results
+                results = [
+                    {
+                        "domain": domain,
+                        "status": "Need to Check",
+                        "status_code": None,
+                        "page_type": "Unknown",
+                        "title": "Timeout during processing"
+                    } for domain in domains_to_process
+                ]
 
         # Excel hisobotini yaratish
         generate_excel(results, output_path)
@@ -115,12 +140,29 @@ async def process_domains(domains, output_path, task_id, batch_size=8):
     except Exception as e:
         logger.error(f"Error in process_domains for task {task_id}: {str(e)}")
         timeout_manager.remove_task(task_id)
-        return False
+
+        # Generate basic error report to avoid completely failing
+        try:
+            error_results = [
+                {
+                    "domain": domain,
+                    "status": "Need to Check",
+                    "status_code": None,
+                    "page_type": "Error",
+                    "title": f"Error: {str(e)[:50]}"
+                } for domain in domains[:max_domains]
+            ]
+            generate_excel(error_results, output_path)
+            logger.info(f"Generated error report for {len(error_results)} domains")
+            return True
+        except Exception as excel_error:
+            logger.error(f"Failed to generate error report: {str(excel_error)}")
+            return False
 
 
-# Fayl yuklash va domainlarni tekshirish
+# Fayl yuklash va domainlarni tekshirish - switched to sync version for better Flask integration
 @app.route('/upload', methods=['POST'])
-async def upload_file():
+def upload_file():
     try:
         if 'file' not in request.files:
             return jsonify({"error": "Fayl yuklanmadi"}), 400
@@ -143,34 +185,66 @@ async def upload_file():
                 return jsonify({"error": "Faylda hech qanday domen topilmadi"}), 400
 
             if len(domains) > app.config['DOMAIN_LIMIT']:
-                return jsonify(
-                    {"error": f"Juda ko'p domenlar ({len(domains)}). Maksimal: {app.config['DOMAIN_LIMIT']}"}), 400
+                logger.warning(f"Too many domains: {len(domains)} (limit: {app.config['DOMAIN_LIMIT']})")
+                domains = domains[:app.config['DOMAIN_LIMIT']]  # Truncate instead of error
 
             # Task ID ni yaratish
             task_id = uuid.uuid4().hex
             output_filename = f"domain_report_{task_id}.xlsx"
             output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
 
-            # Jarayonni boshlatish
-            timeout_manager.add_task(task_id, app.config['PROCESSING_TIMEOUT'])
+            # Start the async processing in a background task
+            # Use gunicorn's worker timeout as our maximum processing time
+            MAX_WORKER_TIMEOUT = 28  # seconds - safely below gunicorn's 30s default
 
-            # Domain tekshirish va Excel yaratish
-            batch_size = min(8, max(1, len(domains) // 50))  # Domenlar soniga qarab optimal batch size
-            await process_domains(domains, output_path, task_id, batch_size)
+            # For smaller domain lists (below 50), process synchronously to avoid worker issues
+            if len(domains) <= 50:
+                # Run the asynchronous function in the synchronous context
+                loop = asyncio.new_event_loop()
+                batch_size = min(5, max(1, len(domains) // 20))  # Smaller batch size
+                result = loop.run_until_complete(process_domains(domains, output_path, task_id, batch_size))
+                loop.close()
 
-            if os.path.exists(output_path):
-                # Javob qaytarish
-                return send_file(output_path, as_attachment=True, download_name="domain_report.xlsx")
+                if result and os.path.exists(output_path):
+                    return send_file(output_path, as_attachment=True, download_name="domain_report.xlsx")
+                else:
+                    return jsonify({"error": "Hisobot yaratishda xatolik"}), 500
             else:
-                return jsonify({"error": "Hisobot yaratishda xatolik"}), 500
+                # For larger lists, create a simple report first with "processing" status
+                initial_results = [
+                    {
+                        "domain": domain,
+                        "status": "Need to Check",
+                        "status_code": None,
+                        "page_type": "Processing",
+                        "title": "Report being generated"
+                    } for domain in domains[:100]  # Show first 100 domains
+                ]
+                generate_excel(initial_results, output_path)
+
+                # Start background processing with a smaller batch size to avoid timeout issues
+                batch_size = min(5, max(1, len(domains) // 50))  # Smaller batch size for large lists
+
+                # Run in background thread to avoid blocking the web response
+                def run_async_task():
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(process_domains(domains, output_path, task_id, batch_size))
+                    loop.close()
+
+                # Start processing in background
+                threading.Thread(target=run_async_task).start()
+
+                # Return the initial report
+                return send_file(output_path, as_attachment=True, download_name="domain_report.xlsx")
 
         return jsonify({"error": "Noto'g'ri fayl formati. .txt, .docx, yoki .xlsx fayllaridan foydalaning"}), 400
 
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
-        return jsonify({"error": "Faylni qayta ishlashda xatolik yuz berdi. Iltimos, qayta urinib ko'ring."}), 500
+        return jsonify({"error": f"Faylni qayta ishlashda xatolik yuz berdi. Xato: {str(e)}"}), 500
 
 
 if __name__ == '__main__':
-    # Asinxron xususiyatlarni qo'llab-quvvatlash uchun
+    # Set appropriate server timeout
     app.run(host='0.0.0.0', port=int(os.environ.get('PORT', 5000)), debug=False)

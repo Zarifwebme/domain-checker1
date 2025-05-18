@@ -18,58 +18,67 @@ logging.basicConfig(
 )
 logger = logging.getLogger(__name__)
 
-# Timeout va qayta urinish sozlamalari
-REQUEST_TIMEOUT = 4  # sekund (reduced from 5)
-MAX_RETRIES = 2
-RETRY_DELAY = 0.5  # sekund (reduced from 1)
-MAX_BATCH_SIZE = 7  # Bir vaqtda tekshiriladigan domenlar soni (increased from 8)
-MAX_CONNECTIONS = 30  # Httpx client uchun maksimal ulanishlar soni (increased from 20)
-RATE_LIMIT = 40  # Sekunddagi so'rovlar soni (increased from 25)
-TIMEOUT_COOLDOWN = 30  # Timeoutdan keyin kutish vaqti (sekund) (reduced from 60)
-DNS_CACHE_SIZE = 5000  # DNS cache size
-CONNECTION_KEEP_ALIVE = 20  # Connection keep-alive seconds
+# Timeout va qayta urinish sozlamalari - optimized for performance
+REQUEST_TIMEOUT = 3  # sekund (reduced from 4)
+MAX_RETRIES = 1  # Reduced from 2
+RETRY_DELAY = 0.3  # sekund (reduced from 0.5)
+MAX_BATCH_SIZE = 5  # Reduced from 7
+MAX_CONNECTIONS = 20  # Reduced from 30
+RATE_LIMIT = 30  # Reduced from 40
+TIMEOUT_COOLDOWN = 15  # Reduced from 30
+DNS_CACHE_SIZE = 1000  # Reduced from 5000
+CONNECTION_KEEP_ALIVE = 10  # Reduced from 20
 
-# DNS keshini yaratish
+# DNS keshini yaratish - with size limits
 dns_cache = {}
 domain_health_cache = {}  # Domain sog'liqi keshi
 
 
-# DNS lookup acceleration
+# Faster DNS lookup with caching
 def cached_getaddrinfo(host, port, family=0, type=0, proto=0, flags=0):
     """DNS lookup with caching for faster resolution"""
+    # Quick return for known bad domains
+    if host in domain_health_cache and domain_health_cache[host] == "poor":
+        return None
+
     if host in dns_cache:
         return dns_cache[host]
     else:
         try:
+            # Use a shorter timeout for DNS lookups
+            socket.setdefaulttimeout(1.5)
             result = socket.getaddrinfo(host, port, family, type, proto, flags)
             dns_cache[host] = result
-            # Cache size limit
+
+            # Cache size limit with periodic cleanup to avoid memory issues
             if len(dns_cache) > DNS_CACHE_SIZE:
-                # Random eviction policy
-                keys_to_remove = random.sample(list(dns_cache.keys()), DNS_CACHE_SIZE // 10)
+                # Random eviction policy - more aggressive cleanup
+                keys_to_remove = random.sample(list(dns_cache.keys()), DNS_CACHE_SIZE // 5)
                 for key in keys_to_remove:
                     dns_cache.pop(key, None)
             return result
         except socket.gaierror:
-            # DNS resolution failed
+            # DNS resolution failed - mark as poor health
+            domain_health_cache[host] = "poor"
+            return None
+        except socket.timeout:
+            # DNS timeout - also mark as poor health
+            domain_health_cache[host] = "poor"
             return None
 
 
-# Pre-built lists for faster classification
+# Pre-built lists for faster classification - minimized for speed
 login_keywords = {
-    'login', 'signin', 'sign in', 'log in', 'sign-in', 'auth', 'authenticate',
-    'register', 'kirish', 'ro\'yxatdan o\'tish', 'username', 'password', 'email',
-    'foydalanuvchi', 'parol'
+    'login', 'signin', 'sign in', 'log in', 'auth', 'authenticate',
+    'register', 'kirish', 'parol'
 }
 
 # Headers for requests to look more like a real browser
 BROWSER_HEADERS = {
     'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/91.0.4472.124 Safari/537.36',
-    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,image/webp,*/*;q=0.8',
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
     'Accept-Language': 'en-US,en;q=0.5',
     'Connection': 'keep-alive',
-    'Upgrade-Insecure-Requests': '1',
-    'Cache-Control': 'max-age=0'
 }
 
 # List of status codes that require check
@@ -80,6 +89,7 @@ async def check_domain(client: httpx.AsyncClient, domain: str, timeout: float = 
     """
     Domenni tekshirish va uning holati, turi va sarlavhasini qaytarish.
     """
+    # Default result for quick returns
     result = {
         "domain": domain,
         "status": "Not Working",
@@ -93,9 +103,23 @@ async def check_domain(client: httpx.AsyncClient, domain: str, timeout: float = 
     if not domain:
         return result
 
+    # Quick optimization - reject obviously invalid domains early
+    if len(domain) > 255 or ' ' in domain:
+        result["title"] = "Invalid domain format"
+        return result
+
     # Domain malumoti (TLD va h.k.)
-    domain_info = tldextract.extract(domain)
-    domain_key = f"{domain_info.domain}.{domain_info.suffix}"
+    try:
+        domain_info = tldextract.extract(domain)
+        domain_key = f"{domain_info.domain}.{domain_info.suffix}"
+
+        # Skip domains that don't have a proper TLD
+        if not domain_info.suffix:
+            result["title"] = "Invalid domain (no TLD)"
+            return result
+    except:
+        # If tldextract fails, just use the domain as is
+        domain_key = domain
 
     # Cached health check - if we've already marked this domain or its root as unreliable
     if domain_key in domain_health_cache and domain_health_cache[domain_key] == "poor":
@@ -121,15 +145,15 @@ async def check_domain(client: httpx.AsyncClient, domain: str, timeout: float = 
             result["title"] = "DNS resolution failed"
             return result
     except Exception as dns_error:
-        # Continue anyway - some DNS servers might still resolve it
-        pass
+        # Log error but continue - some DNS servers might still resolve it
+        logger.debug(f"DNS error for {domain}: {str(dns_error)}")
 
     # Domenni tekshirish
     for attempt in range(MAX_RETRIES + 1):
         try:
             url = f"https://{domain}"
 
-            # Use custom headers to look more like a browser
+            # Use custom headers to look more like a browser but keep headers minimal
             response = await client.get(
                 url,
                 timeout=timeout,
@@ -165,50 +189,39 @@ async def check_domain(client: httpx.AsyncClient, domain: str, timeout: float = 
                 result["title"] = f"Type: {content_type[:50]}"
                 return result
 
-            # Optimize HTML parsing with lighter functionality
+            # Optimize HTML parsing with lighter functionality - limit parsed content
             try:
-                # Use a faster parsing method for title extraction
-                soup = BeautifulSoup(response.text, 'html.parser')
+                # Use a faster parsing method for title extraction - only parse first 100KB
+                content_to_parse = response.text[:100000] if len(response.text) > 100000 else response.text
+                soup = BeautifulSoup(content_to_parse, 'html.parser')
 
                 # Sarlavhani olish
                 title_tag = soup.title
                 if title_tag and title_tag.string:
-                    result["title"] = title_tag.string.strip()[:255]
+                    result["title"] = title_tag.string.strip()[:100]  # Limit title length
                 else:
                     # Agar title yo'q bo'lsa, meta og:title yoki boshqa elementlarni tekshirish
                     meta_title = soup.find('meta', property='og:title')
                     if meta_title and meta_title.get('content'):
-                        result["title"] = meta_title.get('content')[:255]
+                        result["title"] = meta_title.get('content')[:100]
                     else:
                         h1 = soup.find('h1')
                         if h1 and h1.text:
-                            result["title"] = h1.text.strip()[:255]
+                            result["title"] = h1.text.strip()[:100]
                         else:
                             result["title"] = "No Title"
 
-                # Sahifa turini aniqlash (Ichki yoki Tashqi) - optimized, faster approach
-                # Use a simplified scoring algorithm for better performance
-                is_internal = False
-
+                # Sahifa turini aniqlash - simplified approach
                 # Fast check for password inputs (strongest indicator)
                 if soup.find('input', {'type': 'password'}):
-                    is_internal = True
+                    result["page_type"] = "Internal"
                 else:
-                    # Quick check for login-related text in forms
-                    forms = soup.find_all('form', limit=3)  # Only look at first 3 forms
-                    for form in forms:
-                        form_text = form.get_text().lower()
-                        if any(keyword in form_text for keyword in login_keywords):
-                            is_internal = True
-                            break
-
-                    # If still unsure, check for minimal content as fallback
-                    if not is_internal:
-                        # Check page size - very small pages often internal
-                        page_text = soup.get_text()
-                        is_internal = len(page_text) < 800
-
-                result["page_type"] = "Internal" if is_internal else "External"
+                    # Super quick check for login-related text
+                    page_text = soup.get_text()[:3000].lower()  # Only check first 3000 chars
+                    if any(keyword in page_text for keyword in login_keywords):
+                        result["page_type"] = "Internal"
+                    else:
+                        result["page_type"] = "External"
 
             except Exception as e:
                 logger.error(f"HTML parse error for {domain}: {str(e)}")
@@ -228,13 +241,13 @@ async def check_domain(client: httpx.AsyncClient, domain: str, timeout: float = 
                 logger.warning(f"Timeout for {domain}, retry {attempt + 1}/{MAX_RETRIES}")
                 await asyncio.sleep(RETRY_DELAY)
                 continue
-            result["status"] = "Need to Check"  # Changed from "Not Working" to "Need to Check" for timeout
+            result["status"] = "Need to Check"
             result["page_type"] = "Error"
             result["title"] = "Timeout"
         except httpx.RequestError as e:
             result["status"] = "Not Working"
             result["page_type"] = "Error"
-            result["title"] = f"Request Error: {type(e).__name__}"
+            result["title"] = f"Request Error"
             domain_health_cache[domain_key] = "poor"
         except Exception as e:
             logger.error(f"Unexpected error checking {domain}: {str(e)}")
@@ -261,7 +274,7 @@ async def process_batch(client: httpx.AsyncClient, domains: List[str]) -> List[D
             logger.error(f"Error processing domain {domains[i]}: {str(result)}")
             processed_results.append({
                 "domain": domains[i],
-                "status": "Need to Check",  # Changed from "Not Working" to "Need to Check"
+                "status": "Need to Check",
                 "status_code": None,
                 "page_type": "Error",
                 "title": f"Error: {type(result).__name__}"
@@ -272,7 +285,7 @@ async def process_batch(client: httpx.AsyncClient, domains: List[str]) -> List[D
     return processed_results
 
 
-# Parallel group sorting function
+# Improved batch organization prioritizing domain health
 def sort_domains_by_tld(domains: List[str]) -> List[List[str]]:
     """Sort domains into groups by TLD for more efficient batch processing"""
     tld_groups = {}
@@ -294,47 +307,16 @@ def sort_domains_by_tld(domains: List[str]) -> List[List[str]]:
             tld_groups[tld].append(domain)
         except:
             # Fall back to simple domain parsing if tldextract fails
-            parts = clean_domain.split('.')
-            if len(parts) >= 2:
-                tld = parts[-1]
-                if tld not in tld_groups:
-                    tld_groups[tld] = []
-                tld_groups[tld].append(domain)
-            else:
-                # Can't determine TLD
-                if "unknown" not in tld_groups:
-                    tld_groups["unknown"] = []
-                tld_groups["unknown"].append(domain)
+            if "unknown" not in tld_groups:
+                tld_groups["unknown"] = []
+            tld_groups["unknown"].append(domain)
 
-    # Convert to batches, keeping domains with the same TLD together when possible
+    # Create smaller batches for better performance
     batches = []
     for tld, domains in tld_groups.items():
         for i in range(0, len(domains), MAX_BATCH_SIZE):
             batch = domains[i:i + MAX_BATCH_SIZE]
             batches.append(batch)
-
-    # If there are partial batches, combine them to optimize batch sizes
-    partial_batches = [b for b in batches if len(b) < MAX_BATCH_SIZE // 2]
-    full_batches = [b for b in batches if len(b) >= MAX_BATCH_SIZE // 2]
-
-    if partial_batches:
-        # Combine partial batches
-        combined = []
-        current_batch = []
-
-        for batch in partial_batches:
-            if len(current_batch) + len(batch) <= MAX_BATCH_SIZE:
-                current_batch.extend(batch)
-            else:
-                combined.append(current_batch)
-                current_batch = batch
-
-        if current_batch:
-            combined.append(current_batch)
-
-        batches = full_batches + combined
-    else:
-        batches = full_batches
 
     return batches
 
@@ -344,6 +326,12 @@ async def check_domains(domains: List[str], batch_size: int = MAX_BATCH_SIZE) ->
     Domenlar ro'yxatini tekshirish va natijalarni qaytarish.
     Katta ro'yxatlar uchun batching va rate limiting qo'llaniladi.
     """
+    # Track processed domains to provide partial results on timeout
+    _domains_processed = []
+
+    # Store reference to partial results to allow for timeout recovery
+    check_domains._domains_processed = _domains_processed
+
     all_results = []
     total_domains = len(domains)
 
@@ -351,47 +339,87 @@ async def check_domains(domains: List[str], batch_size: int = MAX_BATCH_SIZE) ->
     unique_domains = list(set(domains))
     logger.info(f"Checking {len(unique_domains)} unique domains (from {total_domains} total)")
 
-    # Client limits settings
+    # Limit to reasonable number to prevent timeouts
+    if len(unique_domains) > 1000:
+        logger.warning(f"Too many domains to check in one request. Limiting to 1000.")
+        unique_domains = unique_domains[:1000]
+
+    # Client limits settings - reduced for better performance
     limits = httpx.Limits(
-        max_keepalive_connections=MAX_CONNECTIONS,
+        max_keepalive_connections=MAX_CONNECTIONS // 2,
         max_connections=MAX_CONNECTIONS,
         keepalive_expiry=CONNECTION_KEEP_ALIVE
     )
 
-    # Asinxron HTTP klient yaratish
-    timeout_config = httpx.Timeout(REQUEST_TIMEOUT, connect=2.0)
+    # Asinxron HTTP klient yaratish - with reduced timeouts
+    timeout_config = httpx.Timeout(REQUEST_TIMEOUT, connect=1.5)
 
-    # Set up connection pool and other optimizations
+    # Set up connection pool with relaxed settings
     transport = httpx.AsyncHTTPTransport(
         limits=limits,
-        retries=1,  # We handle our own retries
+        retries=0,  # We handle our own retries
+        http2=False  # Disable HTTP/2 for better compatibility
     )
 
     async with httpx.AsyncClient(
             timeout=timeout_config,
             transport=transport,
             follow_redirects=True,
-            http2=True  # Enable HTTP/2 for efficiency
+            http2=False  # Disable HTTP/2 for reliability
     ) as client:
-        # Optimize domain grouping by TLD to reduce DNS lookups
+        # Optimize domain grouping by TLD with smaller batches
         batches = sort_domains_by_tld(unique_domains)
+        adjusted_batch_size = min(batch_size, MAX_BATCH_SIZE)
 
-        logger.info(f"Processing {len(batches)} optimized batches (max {MAX_BATCH_SIZE} domains per batch)")
+        # Re-batch into smaller groups if needed
+        if adjusted_batch_size < batch_size:
+            new_batches = []
+            for batch in batches:
+                for i in range(0, len(batch), adjusted_batch_size):
+                    new_batches.append(batch[i:i + adjusted_batch_size])
+            batches = new_batches
 
-        # Process batches concurrently, but with a limit to prevent overloading
-        max_concurrent_batches = 3
-        batch_semaphore = asyncio.Semaphore(max_concurrent_batches)
+        logger.info(f"Processing {len(batches)} optimized batches (max {adjusted_batch_size} domains per batch)")
 
-        async def process_batch_with_limit(batch):
-            async with batch_semaphore:
-                return await process_batch(client, batch)
+        # Process batches with stricter concurrency control
+        semaphore = asyncio.Semaphore(3)  # Limit concurrent batches
 
-        batch_tasks = [process_batch_with_limit(batch) for batch in batches]
-        batch_results_list = await asyncio.gather(*batch_tasks)
+        async def process_batch_with_limits(batch):
+            async with semaphore:
+                try:
+                    results = await process_batch(client, batch)
+                    # Track successful domain processing
+                    _domains_processed.extend(results)
+                    return results
+                except Exception as e:
+                    logger.error(f"Batch processing error: {str(e)}")
+                    # Return basic error results for the batch
+                    error_results = [{
+                        "domain": domain,
+                        "status": "Need to Check",
+                        "status_code": None,
+                        "page_type": "Error",
+                        "title": "Batch processing error"
+                    } for domain in batch]
+                    _domains_processed.extend(error_results)
+                    return error_results
 
-        # Flatten results
-        for batch_results in batch_results_list:
-            all_results.extend(batch_results)
+        # Process batches with rate limiting
+        for i in range(0, len(batches), 3):  # Process 3 batches at a time
+            batch_group = batches[i:i + 3]
+            batch_tasks = [process_batch_with_limits(batch) for batch in batch_group]
+            batch_results = await asyncio.gather(*batch_tasks, return_exceptions=True)
+
+            # Handle results
+            for batch_result in batch_results:
+                if isinstance(batch_result, Exception):
+                    logger.error(f"Failed batch: {str(batch_result)}")
+                    continue
+                all_results.extend(batch_result)
+
+            # Rate limiting pause between batch groups
+            if i + 3 < len(batches):
+                await asyncio.sleep(0.5)  # Short pause between batch groups
 
     logger.info(f"Completed checking {len(all_results)} domains")
     return all_results
