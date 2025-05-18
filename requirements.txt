@@ -9,3 +9,4 @@ beautifulsoup4==4.12.3
 gevent==24.2.1
 tldextract
 httpx[http2, http3]
+psutil
