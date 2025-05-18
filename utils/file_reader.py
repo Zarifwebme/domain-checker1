@@ -3,7 +3,7 @@ import openpyxl
 import re
 import logging
 import os
-from typing import List, Optional
+from typing import List, Optional, Set
 
 logger = logging.getLogger(__name__)
 
@@ -11,6 +11,7 @@ logger = logging.getLogger(__name__)
 def clean_domain(domain: str) -> Optional[str]:
     """
     Domen nomini tozalash va validatsiya qilish.
+    Subdomainlarni ham to'g'ri aniqlaydi (masalan: 'sur.ewe.test.uz').
 
     Args:
         domain: Tozalash kerak bo'lgan domen nomi
@@ -24,33 +25,72 @@ def clean_domain(domain: str) -> Optional[str]:
     # Domenni tozalash
     domain = domain.strip().lower()
 
+    # Tekshirish natijalari: kabi yozuvlarni olib tashlash
+    domain = re.sub(r'tekshirish natijalari:.*', '', domain, flags=re.IGNORECASE)
+
     # Protokollarni olib tashlash
     domain = re.sub(r'^https?://', '', domain)
 
     # Trailing slash va qo'shimcha parametrlarni olib tashlash
     domain = re.sub(r'/.*$', '', domain)
 
+    # Bo'sh joylarni yana bir bor tekshirish
+    domain = domain.strip()
+
+    if not domain:
+        return None
+
     # IP-addresslarni tekshirish
     ip_pattern = r'^(\d{1,3}\.){3}\d{1,3}$'
     if re.match(ip_pattern, domain):
         return domain
 
-    # Domainni tekshirish
-    domain_pattern = r'^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$'
+    # Domainni tekshirish - yanada yaxshiroq pattern
+    # Bu pattern ko'p darajali subdomainlarni ham qo'llab-quvvatlaydi
+    domain_pattern = r'^([a-z0-9]([a-z0-9\-]{0,61}[a-z0-9])?\.)+[a-z]{2,}$'
     if re.match(domain_pattern, domain):
-        return domain
-
-    # Subdomenlar uchun tekshirish
-    subdomain_pattern = r'^[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z0-9]+([\-\.]{1}[a-z0-9]+)*\.[a-z]{2,}$'
-    if re.match(subdomain_pattern, domain):
         return domain
 
     return None
 
 
+def extract_domains_from_text(text: str) -> List[str]:
+    """
+    Matndan domenlarni ajratib olish.
+
+    Args:
+        text: Matn
+
+    Returns:
+        Domenlar ro'yxati
+    """
+    if not text:
+        return []
+
+    domains = []
+
+    # Vergul, tab, yangi qator yoki bo'sh joy bilan ajratilgan domenlarni ajratib olish
+    for line in re.split(r'[\n\r]+', text):
+        line = line.strip()
+        if not line:
+            continue
+
+        # Vergul bilan ajratilgan domenlar
+        parts = re.split(r'[,\t ]+', line)
+        for part in parts:
+            part = part.strip()
+            if part:
+                domains.append(part)
+
+    return domains
+
+
 def read_file(file_path: str, max_domains: int = 5000) -> List[str]:
     """
-    Fayldan domainlarni o'qish.
+    Fayldan domainlarni o'qish va formatini to'g'rilash.
+
+    Ko'p darajali subdomainlarni to'g'ri aniqlaydi ('sur.ewe.test.uz' kabi).
+    Fayl tarkibidagi barcha domainlarni topishi uchun yaxshilangan.
 
     Args:
         file_path: Fayl yo'li
@@ -59,7 +99,7 @@ def read_file(file_path: str, max_domains: int = 5000) -> List[str]:
     Returns:
         Domenlar ro'yxati
     """
-    domains = []
+    potential_domains: Set[str] = set()
 
     try:
         # Fayl mavjudligini tekshirish
@@ -70,33 +110,26 @@ def read_file(file_path: str, max_domains: int = 5000) -> List[str]:
         # Faylning turi bo'yicha o'qish
         if file_path.endswith('.txt'):
             with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
-                for line in f:
-                    line = line.strip()
-                    if line and not line.startswith('#'):
-                        domains.append(line)
+                content = f.read()
+                domains_from_text = extract_domains_from_text(content)
+                potential_domains.update(domains_from_text)
 
         elif file_path.endswith('.docx'):
             try:
                 doc = docx.Document(file_path)
+                # Paragraflardan domenlarni olish
                 for para in doc.paragraphs:
                     text = para.text.strip()
-                    if text:
-                        # Har bir satrni alohida domen sifatida qabul qilish
-                        for line in text.split('\n'):
-                            line = line.strip()
-                            if line:
-                                domains.append(line)
+                    domains_from_text = extract_domains_from_text(text)
+                    potential_domains.update(domains_from_text)
 
-                # Jadvallardan ham domenlarni olish
+                # Jadvallardan domenlarni olish
                 for table in doc.tables:
                     for row in table.rows:
                         for cell in row.cells:
                             text = cell.text.strip()
-                            if text:
-                                for line in text.split('\n'):
-                                    line = line.strip()
-                                    if line:
-                                        domains.append(line)
+                            domains_from_text = extract_domains_from_text(text)
+                            potential_domains.update(domains_from_text)
             except Exception as e:
                 logger.error(f"Error reading docx file: {str(e)}")
 
@@ -109,21 +142,14 @@ def read_file(file_path: str, max_domains: int = 5000) -> List[str]:
                         for cell in row:
                             if cell.value and isinstance(cell.value, str):
                                 text = cell.value.strip()
-                                if text:
-                                    # Vergul bilan ajratilgan domenlar ro'yxatini tekshirish
-                                    if ',' in text:
-                                        for part in text.split(','):
-                                            part = part.strip()
-                                            if part:
-                                                domains.append(part)
-                                    else:
-                                        domains.append(text)
+                                domains_from_text = extract_domains_from_text(text)
+                                potential_domains.update(domains_from_text)
             except Exception as e:
                 logger.error(f"Error reading xlsx file: {str(e)}")
 
         # Domenlarni tozalash va validatsiya qilish
         valid_domains = []
-        for domain in domains:
+        for domain in potential_domains:
             cleaned = clean_domain(domain)
             if cleaned:
                 valid_domains.append(cleaned)
@@ -135,7 +161,9 @@ def read_file(file_path: str, max_domains: int = 5000) -> List[str]:
 
         # Duplikatlarni olib tashlash
         unique_domains = list(set(valid_domains))
-        logger.info(f"Read {len(domains)} domains, {len(valid_domains)} valid, {len(unique_domains)} unique")
+        unique_domains.sort()  # Sortirovka qilish
+        logger.info(
+            f"Read {len(potential_domains)} potential domains, {len(valid_domains)} valid, {len(unique_domains)} unique")
 
         return unique_domains
 
