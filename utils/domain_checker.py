@@ -19,15 +19,15 @@ logging.basicConfig(
 logger = logging.getLogger(__name__)
 
 # Timeout va qayta urinish sozlamalari - optimized for performance
-REQUEST_TIMEOUT = 3  # sekund (reduced from 4)
-MAX_RETRIES = 1  # Reduced from 2
-RETRY_DELAY = 0.3  # sekund (reduced from 0.5)
-MAX_BATCH_SIZE = 5  # Reduced from 7
-MAX_CONNECTIONS = 20  # Reduced from 30
-RATE_LIMIT = 30  # Reduced from 40
-TIMEOUT_COOLDOWN = 15  # Reduced from 30
-DNS_CACHE_SIZE = 1000  # Reduced from 5000
-CONNECTION_KEEP_ALIVE = 10  # Reduced from 20
+REQUEST_TIMEOUT = 5  # sekund (increased from 3)
+MAX_RETRIES = 2  # Increased from 1
+RETRY_DELAY = 1.0  # sekund (increased from 0.3)
+MAX_BATCH_SIZE = 3  # Reduced from 5 for more thorough checking
+MAX_CONNECTIONS = 10  # Reduced from 20 for more reliable connections
+RATE_LIMIT = 20  # Reduced from 30 for better rate limiting
+TIMEOUT_COOLDOWN = 30  # Increased from 15
+DNS_CACHE_SIZE = 500  # Reduced from 1000 for more frequent fresh checks
+CONNECTION_KEEP_ALIVE = 20  # Increased from 10
 
 # DNS keshini yaratish - with size limits
 dns_cache = {}
@@ -134,34 +134,54 @@ async def check_domain(client: httpx.AsyncClient, domain: str, timeout: float = 
     domain = domain.rstrip('/')
 
     # First try DNS resolution before even attempting HTTP requests
+    dns_resolved = False
     try:
         # Fast DNS lookup to fail early for non-existent domains
         host = domain.split('/')[0]  # Only take the domain part
-        if cached_getaddrinfo(host, 80) is None and cached_getaddrinfo(host, 443) is None:
-            # DNS resolution failed - domain likely doesn't exist
-            domain_health_cache[domain_key] = "poor"
-            result["status"] = "Not Working"
-            result["page_type"] = "Error"
-            result["title"] = "DNS resolution failed"
-            return result
+        if cached_getaddrinfo(host, 80) is not None or cached_getaddrinfo(host, 443) is not None:
+            dns_resolved = True
     except Exception as dns_error:
         # Log error but continue - some DNS servers might still resolve it
         logger.debug(f"DNS error for {domain}: {str(dns_error)}")
 
+    if not dns_resolved:
+        # Try one more time with a longer timeout
+        try:
+            socket.setdefaulttimeout(3.0)  # Longer timeout for second attempt
+            if cached_getaddrinfo(host, 80) is not None or cached_getaddrinfo(host, 443) is not None:
+                dns_resolved = True
+        except:
+            pass
+
+    if not dns_resolved:
+        result["status"] = "Not Working"
+        result["page_type"] = "Error"
+        result["title"] = "DNS resolution failed"
+        return result
+
     # Domenni tekshirish
     for attempt in range(MAX_RETRIES + 1):
         try:
+            # Try HTTPS first
             url = f"https://{domain}"
-
-            # Use custom headers to look more like a browser but keep headers minimal
             response = await client.get(
                 url,
                 timeout=timeout,
                 follow_redirects=True,
                 headers=BROWSER_HEADERS
             )
-
             result["status_code"] = response.status_code
+
+            # If HTTPS fails with certain status codes, try HTTP
+            if response.status_code in {400, 403, 404, 500, 502, 503, 504}:
+                url = f"http://{domain}"
+                response = await client.get(
+                    url,
+                    timeout=timeout,
+                    follow_redirects=True,
+                    headers=BROWSER_HEADERS
+                )
+                result["status_code"] = response.status_code
 
             # Status logic - 2xx va 3xx kodlar "Working" hisoblanadi
             if 200 <= response.status_code < 400:
@@ -228,7 +248,6 @@ async def check_domain(client: httpx.AsyncClient, domain: str, timeout: float = 
                 result["page_type"] = "Error"
                 result["title"] = "Parse Error"
 
-            # Muvaffaqiyatli bo'lsa, qaytaring
             return result
 
         except httpx.HTTPStatusError as e:

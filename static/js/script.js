@@ -17,6 +17,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const fileName = document.getElementById('fileName');
     const uploadBtn = document.getElementById('uploadBtn');
 
+    if (!fileInput || !fileContainer || !fileName || !uploadBtn) {
+        console.error('Required elements not found');
+        return;
+    }
+
     // File selection handler
     fileInput.addEventListener('change', () => {
         if (fileInput.files.length) {
@@ -37,6 +42,11 @@ function resetFileInput() {
     const fileContainer = document.getElementById('fileContainer');
     const fileName = document.getElementById('fileName');
     const uploadBtn = document.getElementById('uploadBtn');
+
+    if (!fileInput || !fileContainer || !fileName || !uploadBtn) {
+        console.error('Required elements not found');
+        return;
+    }
 
     fileInput.value = '';
     fileContainer.classList.remove('has-file');
@@ -73,128 +83,91 @@ function showToast(message, type = 'info') {
     }, 3000);
 }
 
-// Start the visual progress simulation
-function startProgressSimulation() {
-    currentProgress = 0;
+// Progress bar animation
+function updateProgressBar(progress) {
     const progressBar = document.getElementById('progressBar');
-    const statusText = document.getElementById('statusText');
-
-    // Clear any existing intervals
-    if (progressInterval) {
-        clearInterval(progressInterval);
+    const progressText = document.getElementById('progressText');
+    
+    if (!progressBar || !progressText) {
+        console.error('Progress bar elements not found');
+        return;
     }
-
-    // Set first stage
-    statusText.textContent = processingStages[currentStage];
-
-    // Update progress every 100ms
-    progressInterval = setInterval(() => {
-        // Determine how far to progress based on current stage
-        let targetProgress;
-
-        switch(currentStage) {
-            case 0: // Uploading
-                targetProgress = 25;
-                break;
-            case 1: // Reading domains
-                targetProgress = 40;
-                break;
-            case 2: // Checking domains
-                targetProgress = 90;
-                break;
-            case 3: // Creating Excel
-                targetProgress = 100;
-                break;
-            default:
-                targetProgress = 100;
-        }
-
-        // Increment progress toward target
-        if (currentProgress < targetProgress) {
-            currentProgress += 0.5;
-            progressBar.style.width = `${currentProgress}%`;
-        }
-    }, 100);
-
-    // Simulate stage transitions
-    processingTimer = setTimeout(() => {
-        advanceStage();
-    }, 2000);
-}
-
-// Advance to next processing stage
-function advanceStage() {
-    currentStage++;
-    if (currentStage < processingStages.length) {
-        document.getElementById('statusText').textContent = processingStages[currentStage];
-
-        // Schedule next stage advancement
-        const waitTime = currentStage === 2 ? 5000 : 2000; // Domain checking takes longer
-        processingTimer = setTimeout(() => {
-            advanceStage();
-        }, waitTime);
+    
+    // Update progress bar width
+    progressBar.style.width = `${progress}%`;
+    
+    // Update progress text
+    progressText.textContent = `${progress}%`;
+    
+    // Add continuous scrolling animation
+    if (progress < 100) {
+        progressBar.style.animation = 'progressScroll 1s linear infinite';
+    } else {
+        progressBar.style.animation = 'none';
     }
-}
-
-// Stop progress simulation
-function stopProgressSimulation() {
-    if (progressInterval) {
-        clearInterval(progressInterval);
-        progressInterval = null;
-    }
-
-    if (processingTimer) {
-        clearTimeout(processingTimer);
-        processingTimer = null;
-    }
-
-    currentStage = 0;
-}
-
-// Update domain counter during processing
-function updateDomainCounter(processed, total) {
-    const counter = document.getElementById('domainCounter');
-    counter.textContent = `${processed} / ${total} domenlar tekshirildi`;
-}
-
-// Display the result summary
-function showResultSummary(stats) {
-    const summary = document.getElementById('resultSummary');
-    const totalElem = document.getElementById('totalDomains');
-    const workingElem = document.getElementById('workingDomains');
-    const notWorkingElem = document.getElementById('notWorkingDomains');
-    const checkElem = document.getElementById('checkDomains');
-
-    totalElem.textContent = stats.total;
-    workingElem.textContent = stats.working;
-    notWorkingElem.textContent = stats.notWorking;
-    checkElem.textContent = stats.needCheck;
-
-    summary.style.display = 'block';
 }
 
 // Show download button
 function showDownloadButton(url, filename) {
     const downloadContainer = document.getElementById('downloadContainer');
-    const downloadLink = document.getElementById('downloadLink');
-
-    downloadLink.setAttribute('href', url);
-    downloadLink.setAttribute('download', filename);
+    const downloadBtn = document.getElementById('downloadBtn');
+    
+    if (!downloadContainer || !downloadBtn) {
+        console.error('Download elements not found');
+        return;
+    }
+    
+    downloadBtn.href = url;
+    downloadBtn.download = filename;
     downloadContainer.style.display = 'block';
 }
+
+// Add CSS animation for continuous scrolling
+const style = document.createElement('style');
+style.textContent = `
+    @keyframes progressScroll {
+        0% {
+            background-position: 0% 50%;
+        }
+        100% {
+            background-position: 200% 50%;
+        }
+    }
+    
+    #progressBar {
+        background: linear-gradient(90deg, 
+            #4CAF50 0%, 
+            #45a049 25%, 
+            #4CAF50 50%, 
+            #45a049 75%, 
+            #4CAF50 100%
+        );
+        background-size: 200% 100%;
+        transition: width 0.3s ease-in-out;
+    }
+`;
+document.head.appendChild(style);
 
 // Main upload function
 async function uploadFile() {
     const fileInput = document.getElementById('fileInput');
     const errorDiv = document.getElementById('error');
     const processingContainer = document.getElementById('processingContainer');
-    const resultSummary = document.getElementById('resultSummary');
     const downloadContainer = document.getElementById('downloadContainer');
+    const progressBar = document.getElementById('progressBar');
+    const statusText = document.getElementById('statusText');
+
+    // Check if all required elements exist
+    if (!fileInput || !errorDiv || !processingContainer || !downloadContainer || !progressBar || !statusText) {
+        console.error('Required elements not found');
+        showToast('Saytda xatolik yuz berdi. Iltimos, sahifani yangilang.', 'error');
+        return;
+    }
 
     // Reset previous states
     errorDiv.style.display = 'none';
-    resultSummary.style.display = 'none';
     downloadContainer.style.display = 'none';
+    processingContainer.style.display = 'none';
 
     if (!fileInput.files.length) {
         errorDiv.textContent = 'Iltimos, faylni tanlang';
@@ -205,7 +178,10 @@ async function uploadFile() {
     try {
         // Show processing indicator
         processingContainer.style.display = 'block';
-        startProgressSimulation();
+        statusText.textContent = 'Faylni yuklash...';
+        
+        // Start with 0% progress and continuous animation
+        updateProgressBar(0);
 
         // Prepare form data
         const formData = new FormData();
@@ -217,57 +193,47 @@ async function uploadFile() {
             body: formData
         });
 
-        // Stop progress simulation
-        stopProgressSimulation();
-
-        // Update progress to 100%
-        document.getElementById('progressBar').style.width = '100%';
-        document.getElementById('statusText').textContent = 'Yakunlandi!';
-
-        if (response.ok) {
-            // Successful response
-            const blob = await response.blob();
-            const url = window.URL.createObjectURL(blob);
-
-            // Get domain statistics from response headers if available
-            const stats = {
-                total: parseInt(response.headers.get('X-Total-Domains') || '0'),
-                working: parseInt(response.headers.get('X-Working-Domains') || '0'),
-                notWorking: parseInt(response.headers.get('X-Not-Working-Domains') || '0'),
-                needCheck: parseInt(response.headers.get('X-Need-Check-Domains') || '0')
-            };
-
-            // If no stats from headers, use default values
-            if (stats.total === 0) {
-                stats.total = "Mavjud emas";
-                stats.working = "Mavjud emas";
-                stats.notWorking = "Mavjud emas";
-                stats.needCheck = "Mavjud emas";
+        // Check if response is OK
+        if (!response.ok) {
+            // Try to get error message from response
+            const contentType = response.headers.get('content-type');
+            if (contentType && contentType.includes('application/json')) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Server xatosi yuz berdi');
+            } else {
+                throw new Error('Server xatosi yuz berdi');
             }
-
-            // Show the summary
-            showResultSummary(stats);
-
-            // Show download button
-            showDownloadButton(url, 'domain_report.xlsx');
-
-            // Show success message
-            showToast('Hisobot muvaffaqiyatli yaratildi!', 'success');
-        } else {
-            // Error response
-            const data = await response.json();
-            errorDiv.textContent = data.error || 'Faylni qayta ishlashda xatolik';
-            errorDiv.style.display = 'block';
-            processingContainer.style.display = 'none';
-            showToast('Xatolik yuz berdi!', 'error');
         }
+
+        // Get statistics from headers
+        const total = response.headers.get('X-Total-Domains');
+        const working = response.headers.get('X-Working-Domains');
+        const notWorking = response.headers.get('X-Not-Working-Domains');
+        const needCheck = response.headers.get('X-Need-Check-Domains');
+
+        // Update progress to 100% and stop animation
+        updateProgressBar(100);
+        statusText.textContent = 'Yakunlandi!';
+
+        // Get the file blob
+        const blob = await response.blob();
+        const url = window.URL.createObjectURL(blob);
+
+        // Show download button
+        showDownloadButton(url, 'domain_report.xlsx');
+
+        // Show success message
+        showToast('Hisobot muvaffaqiyatli yaratildi!', 'success');
+
     } catch (error) {
-        // Exception handling
-        stopProgressSimulation();
-        processingContainer.style.display = 'none';
-        errorDiv.textContent = 'Server xatosi. Iltimos, qayta urinib ko\'ring.';
+        console.error('Upload error:', error);
+        // Show error message
+        errorDiv.textContent = error.message || 'Server xatosi. Iltimos, qayta urinib ko\'ring.';
         errorDiv.style.display = 'block';
-        showToast('Server xatosi!', 'error');
-        console.error('Error:', error);
+        processingContainer.style.display = 'none';
+        if (progressBar) {
+            progressBar.style.animation = 'none';
+        }
+        showToast(error.message || 'Xatolik yuz berdi!', 'error');
     }
 }

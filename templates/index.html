@@ -5,24 +5,24 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Domenlarni tekshirish</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link rel="stylesheet" href="/static/css/styles.css">
-    <link rel="icon" href="/static/favicon.ico" type="image/x-icon">
+    <link rel="stylesheet" href="{{ url_for('static', filename='css/styles.css') }}">
+    <link rel="icon" href="{{ url_for('static', filename='favicon.ico') }}" type="image/x-icon">
 </head>
 <body>
     <!-- Floating Logos -->
-    <div class="floating-logo word1"><img src="/static/images/word1.png" alt="Word 1"></div>
-    <div class="floating-logo word2"><img src="/static/images/word2.png" alt="Word 2"></div>
-    <div class="floating-logo excel1"><img src="/static/images/excel1.png" alt="Excel 1"></div>
-    <div class="floating-logo excel2"><img src="/static/images/excel2.png" alt="Excel 2"></div>
-    <div class="floating-logo text1"><img src="/static/images/text1.png" alt="Text 1"></div>
-    <div class="floating-logo text2"><img src="/static/images/text2.png" alt="Text 2"></div>
+    <div class="floating-logo word1"><img src="{{ url_for('static', filename='images/word1.png') }}" alt="Word 1"></div>
+    <div class="floating-logo word2"><img src="{{ url_for('static', filename='images/word2.png') }}" alt="Word 2"></div>
+    <div class="floating-logo excel1"><img src="{{ url_for('static', filename='images/excel1.png') }}" alt="Excel 1"></div>
+    <div class="floating-logo excel2"><img src="{{ url_for('static', filename='images/excel2.png') }}" alt="Excel 2"></div>
+    <div class="floating-logo text1"><img src="{{ url_for('static', filename='images/text1.png') }}" alt="Text 1"></div>
+    <div class="floating-logo text2"><img src="{{ url_for('static', filename='images/text2.png') }}" alt="Text 2"></div>
 
     <div class="container">
         <!-- Main Content -->
         <div class="content">
             <h1>Domenlarni tekshirish</h1>
             <p>Domenlar holatini tekshirish uchun .txt, .docx yoki .xlsx faylini yuklang.</p>
-
+            
             <div class="upload-box">
                 <!-- File Input with Visual Feedback -->
                 <div id="fileContainer" class="file-input-container">
@@ -37,40 +37,19 @@
 
             <!-- Error Display -->
             <div id="error" class="error"></div>
-
+            
             <!-- Processing Indicator -->
-            <div id="processingContainer" class="processing-container">
+            <div id="processingContainer" class="processing-container" style="display: none;">
                 <div class="progress-wrapper">
                     <div id="progressBar" class="progress-bar"></div>
+                    <div id="progressText" class="progress-text">0%</div>
                 </div>
                 <div id="statusText" class="status-text">Tayyorlanmoqda...</div>
-                <div id="domainCounter" class="domain-counter">Domenlar tekshirilmoqda...</div>
             </div>
-
-            <!-- Results Summary -->
-            <div id="resultSummary" class="result-summary">
-                <div class="summary-title">Tekshirish natijalari</div>
-                <div class="summary-item">
-                    <span class="summary-label">Jami domenlar:</span>
-                    <span id="totalDomains" class="summary-value">0</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">Ishlayotgan domenlar:</span>
-                    <span id="workingDomains" class="summary-value">0</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">Ishlamayotgan domenlar:</span>
-                    <span id="notWorkingDomains" class="summary-value">0</span>
-                </div>
-                <div class="summary-item">
-                    <span class="summary-label">Tekshirish kerak:</span>
-                    <span id="checkDomains" class="summary-value">0</span>
-                </div>
-            </div>
-
+            
             <!-- Download Button -->
-            <div id="downloadContainer" class="download-container">
-                <a id="downloadLink" href="#" class="download-btn">
+            <div id="downloadContainer" class="download-container" style="display: none;">
+                <a id="downloadBtn" href="#" class="download-btn">
                     <i class="fa fa-download"></i>
                     Excel hisobotini yuklab olish
                 </a>
@@ -83,6 +62,6 @@
         </footer>
     </div>
 
-    <script src="/static/js/script.js"></script>
+    <script src="{{ url_for('static', filename='js/script.js') }}"></script>
 </body>
 </html>

@@ -136,7 +136,7 @@ async def process_domains(domains, output_path, task_id, batch_size=5):
 
         # Jarayonni tugallanganligi haqida belgi
         timeout_manager.remove_task(task_id)
-        return True
+        return True, results
     except Exception as e:
         logger.error(f"Error in process_domains for task {task_id}: {str(e)}")
         timeout_manager.remove_task(task_id)
@@ -154,95 +154,92 @@ async def process_domains(domains, output_path, task_id, batch_size=5):
             ]
             generate_excel(error_results, output_path)
             logger.info(f"Generated error report for {len(error_results)} domains")
-            return True
+            return False, error_results
         except Exception as excel_error:
             logger.error(f"Failed to generate error report: {str(excel_error)}")
-            return False
+            return False, []
 
 
 # Fayl yuklash va domainlarni tekshirish - switched to sync version for better Flask integration
 @app.route('/upload', methods=['POST'])
 def upload_file():
+    if 'file' not in request.files:
+        return jsonify({'error': 'Fayl topilmadi'}), 400
+        
+    file = request.files['file']
+    if file.filename == '':
+        return jsonify({'error': 'Fayl tanlanmagan'}), 400
+        
+    if not file or not allowed_file(file.filename):
+        return jsonify({'error': 'Noto\'g\'ri fayl formati'}), 400
+
     try:
-        if 'file' not in request.files:
-            return jsonify({"error": "Fayl yuklanmadi"}), 400
-
-        file = request.files['file']
-        if file.filename == '':
-            return jsonify({"error": "Fayl tanlanmadi"}), 400
-
-        if file and allowed_file(file.filename):
-            # Xavfsiz fayl nomini yaratish
-            filename = secure_filename(file.filename)
-            file_path = os.path.join(app.config['UPLOAD_FOLDER'], filename)
-            file.save(file_path)
-
-            # Domenlarni fayldan o'qish
-            logger.info(f"Reading domains from {filename}")
-            domains = read_file(file_path)
-
+        # Create upload directory if it doesn't exist
+        upload_dir = os.path.join(app.root_path, 'uploads')
+        os.makedirs(upload_dir, exist_ok=True)
+        
+        # Save the uploaded file temporarily
+        temp_filename = secure_filename(file.filename)
+        temp_filepath = os.path.join(upload_dir, temp_filename)
+        file.save(temp_filepath)
+        
+        try:
+            # Read domains from the saved file
+            domains = read_file(temp_filepath)
             if not domains:
-                return jsonify({"error": "Faylda hech qanday domen topilmadi"}), 400
+                return jsonify({'error': 'Faylda domenlar topilmadi'}), 400
 
-            if len(domains) > app.config['DOMAIN_LIMIT']:
-                logger.warning(f"Too many domains: {len(domains)} (limit: {app.config['DOMAIN_LIMIT']})")
-                domains = domains[:app.config['DOMAIN_LIMIT']]  # Truncate instead of error
-
-            # Task ID ni yaratish
-            task_id = uuid.uuid4().hex
-            output_filename = f"domain_report_{task_id}.xlsx"
-            output_path = os.path.join(app.config['UPLOAD_FOLDER'], output_filename)
-
-            # Start the async processing in a background task
-            # Use gunicorn's worker timeout as our maximum processing time
-            MAX_WORKER_TIMEOUT = 28  # seconds - safely below gunicorn's 30s default
-
-            # For smaller domain lists (below 50), process synchronously to avoid worker issues
-            if len(domains) <= 50:
-                # Run the asynchronous function in the synchronous context
-                loop = asyncio.new_event_loop()
-                batch_size = min(5, max(1, len(domains) // 20))  # Smaller batch size
-                result = loop.run_until_complete(process_domains(domains, output_path, task_id, batch_size))
+            # Create unique task ID
+            task_id = str(uuid.uuid4())
+            
+            # Create output directory if it doesn't exist
+            output_dir = os.path.join(app.root_path, 'reports')
+            os.makedirs(output_dir, exist_ok=True)
+            
+            # Set output path
+            output_path = os.path.join(output_dir, f'report_{task_id}.xlsx')
+            
+            # Process domains synchronously to ensure we have results
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            batch_size = min(5, max(1, len(domains) // 20))  # Smaller batch size
+            try:
+                result, check_results = loop.run_until_complete(process_domains(domains, output_path, task_id, batch_size))
                 loop.close()
 
                 if result and os.path.exists(output_path):
-                    return send_file(output_path, as_attachment=True, download_name="domain_report.xlsx")
+                    # Calculate statistics from actual results
+                    stats = {
+                        "total": len(domains),
+                        "working": sum(1 for d in check_results if d.get("status") == "Working"),
+                        "notWorking": sum(1 for d in check_results if d.get("status") == "Not Working"),
+                        "needCheck": sum(1 for d in check_results if d.get("status") == "Need to Check")
+                    }
+                    
+                    # Add statistics to response headers
+                    response = send_file(output_path, as_attachment=True, download_name="domain_report.xlsx")
+                    response.headers['X-Total-Domains'] = str(stats["total"])
+                    response.headers['X-Working-Domains'] = str(stats["working"])
+                    response.headers['X-Not-Working-Domains'] = str(stats["notWorking"])
+                    response.headers['X-Need-Check-Domains'] = str(stats["needCheck"])
+                    return response
                 else:
-                    return jsonify({"error": "Hisobot yaratishda xatolik"}), 500
-            else:
-                # For larger lists, create a simple report first with "processing" status
-                initial_results = [
-                    {
-                        "domain": domain,
-                        "status": "Need to Check",
-                        "status_code": None,
-                        "page_type": "Processing",
-                        "title": "Report being generated"
-                    } for domain in domains[:100]  # Show first 100 domains
-                ]
-                generate_excel(initial_results, output_path)
-
-                # Start background processing with a smaller batch size to avoid timeout issues
-                batch_size = min(5, max(1, len(domains) // 50))  # Smaller batch size for large lists
-
-                # Run in background thread to avoid blocking the web response
-                def run_async_task():
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-                    loop.run_until_complete(process_domains(domains, output_path, task_id, batch_size))
-                    loop.close()
-
-                # Start processing in background
-                threading.Thread(target=run_async_task).start()
-
-                # Return the initial report
-                return send_file(output_path, as_attachment=True, download_name="domain_report.xlsx")
-
-        return jsonify({"error": "Noto'g'ri fayl formati. .txt, .docx, yoki .xlsx fayllaridan foydalaning"}), 400
-
+                    return jsonify({'error': 'Hisobot yaratishda xatolik yuz berdi'}), 500
+            except Exception as e:
+                logger.error(f"Error processing domains: {str(e)}")
+                return jsonify({'error': 'Domenlarni tekshirishda xatolik yuz berdi'}), 500
+            finally:
+                loop.close()
+        finally:
+            # Clean up the temporary file
+            try:
+                os.remove(temp_filepath)
+            except Exception as e:
+                logger.error(f"Error removing temporary file: {str(e)}")
+            
     except Exception as e:
         logger.error(f"Upload error: {str(e)}")
-        return jsonify({"error": f"Faylni qayta ishlashda xatolik yuz berdi. Xato: {str(e)}"}), 500
+        return jsonify({'error': 'Faylni qayta ishlashda xatolik yuz berdi'}), 500
 
 
 if __name__ == '__main__':

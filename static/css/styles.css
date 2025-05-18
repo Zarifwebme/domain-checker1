@@ -212,18 +212,29 @@ button:disabled {
 }
 
 .download-btn {
-    background-color: #4CAF50;
     display: inline-flex;
     align-items: center;
-    justify-content: center;
     gap: 0.5rem;
+    background-color: #4CAF50;
+    color: white;
+    padding: 0.85rem 2rem;
+    border-radius: 8px;
+    text-decoration: none;
+    font-weight: 500;
+    transition: all 0.2s;
 }
 
 .download-btn:hover {
-    background-color: #3d8b40;
+    background-color: #45a049;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 8px rgba(0, 0, 0, 0.1);
 }
 
-/* Floating Logos */
+.download-btn:active {
+    transform: translateY(0);
+}
+
+/* Floating logos */
 .floating-logo {
     position: absolute;
     z-index: 1;
